@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPC player demo</title>
+
+  <!-- from https://github.com/MatthewCallis/spc.js/blob/master/dist/spc-aurora.js -->
+  <script src="spc-aurora.js"></script>
+
+  <!-- from https://github.com/MatthewCallis/spc.js/blob/master/src/spc-libs.js -->
+  <script src="spc-libs.js"></script>
+
+  <!-- also place https://github.com/MatthewCallis/spc.js/blob/master/src/spc-libs.wasm into the same directory -->
+</head>
+<body>
+  <h1>SPC Player</h1>
+  <input type="file" id="fileInput" accept=".spc" />
+  <p id="status">Select an SPC file to play.</p>
+  <button id="playButton" disabled>Play</button>
+  <p>Current Time: <span id="currentTime">0:00</span></p>
+  <p>Duration: <span id="duration">0:00</span></p>
+  <input type="range" id="seekBar" min="0" max="100" value="0" disabled />
+
+  <script>
+    let asset = null
+    let isPlaying = false
+
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60)
+      const secs = Math.floor(seconds % 60).toString().padStart(2, '0')
+      return `${minutes}:${secs}`
+    }
+
+    // example test file: https://snes.in/spc/ct/ct-306.spc
+    document.getElementById('fileInput').addEventListener('change', (event) => {
+      const file = event.target.files[0]
+      if (!file) return
+
+      const reader = new FileReader()
+      reader.onload = () => {
+        const audioData = new Uint8Array(reader.result)
+        const blob = new Blob([audioData], { type: 'audio/spc' })
+        asset = AV.Player.fromFile(blob)
+
+        asset.on('progress', (currentTime) => {
+          document.getElementById('seekBar').value = (currentTime / asset.duration) * 100
+          document.getElementById('currentTime').textContent = formatTime(currentTime / 1000)
+        })
+
+        asset.on('end', () => {
+          isPlaying = false
+          document.getElementById('playButton').textContent = 'Play'
+          document.getElementById('seekBar').value = 0
+          document.getElementById('currentTime').textContent = '0:00'
+        })
+
+        document.getElementById('status').textContent = `Loaded: ${file.name}`
+        document.getElementById('duration').textContent = formatTime(asset.duration / 1000)
+        document.getElementById('seekBar').disabled = false
+        document.getElementById('playButton').disabled = false
+        document.getElementById('playButton').textContent = 'Pause'
+        isPlaying = true
+
+        asset.preload()
+        asset.play()
+      }
+
+      reader.readAsArrayBuffer(file)
+    })
+
+    document.getElementById('playButton').addEventListener('click', () => {
+      if (!asset) return
+      if (isPlaying) {
+        asset.pause()
+        isPlaying = false
+        document.getElementById('playButton').textContent = 'Play'
+      } else {
+        asset.play()
+        isPlaying = true
+        document.getElementById('playButton').textContent = 'Pause'
+      }
+    })
+
+    document.getElementById('seekBar').addEventListener('input', (event) => {
+      if (!asset) return
+      const seekTime = (event.target.value / 100) * asset.duration
+      asset.seek(seekTime)
+    })
+  </script>
+</body>
+</html>
